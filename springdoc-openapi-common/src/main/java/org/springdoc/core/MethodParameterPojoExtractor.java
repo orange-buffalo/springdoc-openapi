@@ -19,11 +19,15 @@
  */
 package org.springdoc.core;
 
+import io.swagger.v3.core.util.PrimitiveType;
+import io.swagger.v3.oas.annotations.Parameter;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -41,11 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
-
-import io.swagger.v3.core.util.PrimitiveType;
-import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.commons.lang3.ArrayUtils;
-
 import org.springframework.core.MethodParameter;
 import org.springframework.lang.Nullable;
 
@@ -131,11 +131,26 @@ class MethodParameterPojoExtractor {
 	private static Stream<MethodParameter> fromGetterOfField(Class<?> paramClass, Field field, String fieldNamePrefix) {
 		if (isSimpleType(field.getType()))
 			return fromSimpleClass(paramClass, field, fieldNamePrefix);
+		else if (field.getGenericType() instanceof TypeVariable<?>)
+		    return extractTypeParameter(paramClass, (TypeVariable<?>) field.getGenericType(), field, fieldNamePrefix);
 		else
 			return extractFrom(field.getType(), fieldNamePrefix + field.getName() + ".");
 	}
 
-	/**
+    private static Stream<MethodParameter> extractTypeParameter(
+            Class<?> owningClass,
+            TypeVariable<?> genericType,
+            Field field,
+            String fieldNamePrefix) {
+
+        Type resolvedType = ReturnTypeParser.resolveType(genericType, owningClass);
+        if (resolvedType instanceof Class<?> && isSimpleType((Class<?>) resolvedType)) {
+            return fromSimpleClass(owningClass, field, fieldNamePrefix);
+        }
+        return Stream.empty();
+    }
+
+    /**
 	 * From simple class stream.
 	 *
 	 * @param paramClass the param class
